@@ -54,17 +54,14 @@ fun PromptLabScreen(vm: PromptLabViewModel = viewModel()) {
         // Preset templates
         Text("Templates:", style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.height(4.dp))
-        listOf(
-            "Summarize the following text:",
-            "Rewrite this in a professional tone:",
-            "Generate a code snippet for:",
-            "Translate to Hindi:",
-            "Explain this concept simply:"
-        ).forEach { tmpl ->
-            AssistiveChip(
-                onClick = { prompt = tmpl },
-                label = { Text(tmpl, style = MaterialTheme.typography.bodySmall) }
-            )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val templates = listOf("Summarize", "Rewrite", "Code", "Explain")
+            for (tmpl in templates) {
+                SuggestionChip(
+                    onClick = { prompt = tmpl },
+                    label = { Text(tmpl, style = MaterialTheme.typography.bodySmall) }
+                )
+            }
         }
 
         Spacer(Modifier.height(8.dp))

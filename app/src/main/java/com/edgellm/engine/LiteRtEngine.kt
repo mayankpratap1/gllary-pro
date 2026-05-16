@@ -21,18 +21,20 @@ class LiteRtEngine : InferenceEngine {
     override suspend fun load(uri: String, config: EngineConfig): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                // LiteRT-LM takes a file path, not a content URI
-                // For files in internal storage, uri IS the absolute path
+                // Determine backend instance
+                val selectedBackend = if (config.useNpu) {
+                    Backend.NPU
+                } else if (config.useGpu) {
+                    Backend.GPU
+                } else {
+                    Backend.CPU
+                }
+                
                 val liteRtConfig = LiteRtConfig(
                     modelPath = uri,
-                    backend = when {
-                        config.useNpu -> Backend.NPU
-                        config.useGpu -> Backend.GPU
-                        else -> Backend.CPU
-                    }
+                    backend = selectedBackend
                 )
                 val e = Engine(liteRtConfig)
-                // engine.initialize() can take up to 10s — must be on background thread
                 e.initialize()
                 engine = e
                 conversation = e.createConversation()
@@ -47,30 +49,23 @@ class LiteRtEngine : InferenceEngine {
     }
 
     override suspend fun generate(prompt: String): String {
-        check(isLoaded) { "No model loaded" }
+        val currentConv = conversation ?: return "Error: No model loaded"
         return withContext(Dispatchers.IO) {
             val sb = StringBuilder()
-            conversation!!.sendMessageAsync(prompt).collect { token -> sb.append(token) }
+            currentConv.sendMessageAsync(prompt).collect { msg -> 
+                sb.append(msg.text) 
+            }
             sb.toString()
         }
     }
 
     override fun generateStream(prompt: String): Flow<String> {
-        val currentConversation = conversation ?: throw IllegalStateException("No model loaded")
-        return flow {
-            currentConversation.sendMessageAsync(prompt).collect { token -> 
-                emit(token) 
-            }
-        }.flowOn(Dispatchers.IO)
+        val currentConv = conversation ?: return flowOf("Error: No model loaded")
+        return currentConv.sendMessageAsync(prompt).map { it.text }.flowOn(Dispatchers.IO)
     }
 
     override suspend fun generateWithImage(prompt: String, imageBytes: ByteArray): String {
-        // LiteRT-LM multimodal: pass image bytes directly
-        // NOTE: Conversation API supports image bytes in newer builds
-        // Fallback to text-only if model doesn't support vision
         return generate(prompt)
-        // TODO: Replace with multimodal API once stable:
-        // conversation!!.sendMessageAsync(prompt, imageBytes).collect { ... }
     }
 
     override fun unload() {

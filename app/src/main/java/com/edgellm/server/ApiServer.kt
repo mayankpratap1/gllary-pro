@@ -63,11 +63,11 @@ data class Delta(val content: String? = null)
 
 class ApiServer(private val engine: InferenceEngine) {
 
-    private var server: ApplicationEngine? = null
+    private var server: Any? = null
 
     fun start(port: Int = 8080) {
         if (server != null) return
-        server = embeddedServer(CIO, port = port) {
+        val s = embeddedServer(CIO, port = port) {
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true })
             }
@@ -116,11 +116,13 @@ class ApiServer(private val engine: InferenceEngine) {
                     }
                 }
             }
-        }.start(wait = false)
+        }
+        server = s
+        s.start(wait = false)
     }
 
     fun stop() {
-        server?.stop(1000, 2000)
+        (server as? EmbeddedServer<*, *>)?.stop(1000, 2000)
         server = null
     }
 }
