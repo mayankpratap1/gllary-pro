@@ -17,24 +17,14 @@ android {
         versionCode = 1
         versionName = "1.0"
         
-        ndk { 
-            abiFilters += listOf("arm64-v8a", "x86_64") 
-        }
+        ndk { abiFilters += listOf("arm64-v8a") }
     }
 
-    buildFeatures { 
-        compose = true 
-    }
+    buildFeatures { compose = true }
     
     packaging {
         resources {
-            excludes += setOf(
-                "META-INF/ASL-2.0.txt", "META-INF/LGPL-2.1.txt",
-                "META-INF/DEPENDENCIES", "META-INF/LICENSE",
-                "META-INF/LICENSE.txt", "META-INF/NOTICE",
-                "META-INF/NOTICE.txt", "META-INF/INDEX.LIST",
-                "META-INF/io.netty.versions.properties"
-            )
+            excludes += setOf("META-INF/*.kotlin_module", "META-INF/DEPENDENCIES")
         }
     }
     
@@ -55,22 +45,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("androidx.activity:activity-compose:1.9.1")
 
-    // AI Engines
+    // CORE: LiteRT for Android (The only reliable engine for now)
     implementation("com.google.ai.edge.litertlm:litertlm-android:latest.release")
-    implementation("io.github.ljcamargo:llamacpp-kotlin:0.4.0")
 
-    // Ktor server
-    implementation("io.ktor:ktor-server-cio:3.2.3")
-    implementation("io.ktor:ktor-server-core:3.2.3")
-    implementation("io.ktor:ktor-server-content-negotiation:3.2.3")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:3.2.3")
-
-    // Camera
-    implementation("androidx.camera:camera-camera2:1.3.4")
-    implementation("androidx.camera:camera-lifecycle:1.3.4")
-    implementation("androidx.camera:camera-view:1.3.4")
-
-    // Compose
+    // UI & Navigation
     implementation(platform("androidx.compose:compose-bom:2024.09.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
@@ -78,14 +56,17 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
 
-    // Room
+    // Persistence (Room)
     implementation("androidx.room:room-runtime:2.7.0")
     implementation("androidx.room:room-ktx:2.7.0")
     ksp("androidx.room:room-compiler:2.7.0")
 
-    // Image loading
+    // Multimodal
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
     
-    // Markdown
-    implementation("io.noties.markwon:core:4.6.2")
+    // JSON & Network
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
 }
