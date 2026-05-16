@@ -2,55 +2,64 @@ package com.edgellm.features.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.edgellm.data.ChatRepository
 import com.edgellm.skills.SkillManager
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class ChatState(
     val messages: List<ChatMessage> = emptyList(),
     val isGenerating: Boolean = false,
-    val modelLoaded: Boolean = false,
-    val error: String? = null
+    val modelLoaded: Boolean = false
 )
 
 class ChatViewModel : ViewModel() {
+    
+    // Connect to the repository for persistence
     private val _state = MutableStateFlow(ChatState())
-    val state: StateFlow<ChatState> = _state
+    val state: StateFlow<ChatState> = combine(
+        ChatRepository.messages,
+        _state
+    ) { messages, internalState ->
+        internalState.copy(messages = messages)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChatState())
 
     var engineRef: com.edgellm.engine.InferenceEngine? = null
     var skillManager: SkillManager? = null
-    var agentSkillsEnabled: Boolean = false
+    var agentSkillsEnabled: Boolean = true
 
     fun sendMessage(text: String) {
         val engine = engineRef ?: return
-        val userMsg = ChatMessage("user", text)
-        val history = _state.value.messages + userMsg
         
-        _state.value = _state.value.copy(
-            messages = history + ChatMessage("assistant", ""),
-            isGenerating = true
-        )
+        // Add user message to persistent repository
+        val userMsg = ChatMessage("user", text)
+        ChatRepository.addMessage(userMsg)
+        
+        // Add empty assistant message to be filled
+        val assistantMsg = ChatMessage("assistant", "")
+        ChatRepository.addMessage(assistantMsg)
+        
+        _state.value = _state.value.copy(isGenerating = true, modelLoaded = true)
         
         viewModelScope.launch {
             val systemPrompt = if (agentSkillsEnabled) {
                 skillManager?.buildSkillSystemPrompt(skillManager!!.skills.value) ?: ""
             } else ""
 
-            val prompt = buildPrompt(systemPrompt, history)
+            val history = ChatRepository.messages.value
+            val prompt = buildPrompt(systemPrompt, history.dropLast(1)) // exclude the empty assistant msg
 
             var fullText = ""
             try {
                 engine.generateStream(prompt).collect { token ->
                     fullText += token
                     val result = processThinkingTags(fullText)
-                    val updated = _state.value.messages.dropLast(1) + 
+                    ChatRepository.updateLastMessage(
                         ChatMessage("assistant", result.second, result.first.ifEmpty { null })
-                    _state.value = _state.value.copy(messages = updated)
+                    )
                 }
             } catch (e: Exception) {
-                val updated = _state.value.messages.dropLast(1) + ChatMessage("assistant", "Error: ${e.message}")
-                _state.value = _state.value.copy(messages = updated)
+                ChatRepository.updateLastMessage(ChatMessage("assistant", "Error: ${e.message}"))
             } finally {
                 _state.value = _state.value.copy(isGenerating = false)
             }

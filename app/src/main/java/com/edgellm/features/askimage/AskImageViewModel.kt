@@ -6,13 +6,14 @@ import android.net.Uri
 import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.edgellm.data.ChatRepository
 import com.edgellm.engine.InferenceEngine
+import com.edgellm.features.chat.ChatMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 
 class AskImageViewModel : ViewModel() {
     private val _state = MutableStateFlow(AskImageState())
@@ -46,10 +47,18 @@ class AskImageViewModel : ViewModel() {
         val bytes = _state.value.imageBytes ?: return
         
         _state.value = _state.value.copy(isAnalyzing = true)
+        
+        // Add to global chat history for persistence
+        ChatRepository.addMessage(ChatMessage("user", "[Image Sent] $prompt"))
+        
         viewModelScope.launch {
             try {
+                // Trigger actual engine inference
                 val response = engine.generateWithImage(prompt, bytes)
                 _state.value = _state.value.copy(result = response, isAnalyzing = false)
+                
+                // Save AI response to history
+                ChatRepository.addMessage(ChatMessage("assistant", response))
             } catch (e: Exception) {
                 _state.value = _state.value.copy(result = "Error: ${e.message}", isAnalyzing = false)
             }

@@ -7,9 +7,13 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.edgellm.data.ChatRepository
 import com.edgellm.engine.InferenceEngine
+import com.edgellm.features.chat.ChatMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import java.util.*
 
 class AudioScribeViewModel : ViewModel() {
@@ -38,7 +42,10 @@ class AudioScribeViewModel : ViewModel() {
                 override fun onResults(results: Bundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     val text = matches?.get(0) ?: ""
-                    _state.value = _state.value.copy(transcript = text, isProcessing = false)
+                    _state.value = _state.value.copy(transcript = text, isProcessing = true)
+                    
+                    // Automatically send transcription to the AI engine
+                    processWithAI(text)
                 }
                 override fun onPartialResults(partialResults: Bundle?) {}
                 override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -50,6 +57,25 @@ class AudioScribeViewModel : ViewModel() {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
         }
         speechRecognizer?.startListening(intent)
+    }
+
+    private fun processWithAI(text: String) {
+        val engine = engineRef ?: return
+        
+        // Add to persistent chat history
+        ChatRepository.addMessage(ChatMessage("user", "[Voice] $text"))
+        
+        viewModelScope.launch {
+            try {
+                val response = engine.generate(text)
+                _state.value = _state.value.copy(transcript = "AI Response: $response", isProcessing = false)
+                
+                // Save AI response to history
+                ChatRepository.addMessage(ChatMessage("assistant", response))
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(error = "AI Error: ${e.message}", isProcessing = false)
+            }
+        }
     }
 
     fun stopRecording() {
