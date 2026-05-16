@@ -6,11 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,11 +18,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(vm: ChatViewModel = viewModel()) {
+fun ChatScreen(
+    vm: ChatViewModel,
+    onOpenDrawer: () -> Unit
+) {
     val state by vm.state.collectAsState()
     val listState = rememberLazyListState()
     var input by remember { mutableStateOf("") }
 
+    // Auto-scroll logic
     LaunchedEffect(state.messages.size) {
         if (state.messages.isNotEmpty()) {
             listState.animateScrollToItem(state.messages.size - 1)
@@ -34,11 +36,17 @@ fun ChatScreen(vm: ChatViewModel = viewModel()) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AI Chat", style = MaterialTheme.typography.titleLarge) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
+                title = { Text("AI Chat") },
+                navigationIcon = {
+                    IconButton(onClick = onOpenDrawer) {
+                        Icon(Icons.Default.Menu, "History")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { vm.createNewChat() }) {
+                        Icon(Icons.Default.Add, "New Chat")
+                    }
+                }
             )
         },
         bottomBar = {
@@ -55,7 +63,7 @@ fun ChatScreen(vm: ChatViewModel = viewModel()) {
                         value = input,
                         onValueChange = { input = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("Type a message...") },
+                        placeholder = { Text("Message...") },
                         maxLines = 4,
                         enabled = !state.isGenerating,
                         shape = MaterialTheme.shapes.extraLarge
@@ -77,25 +85,42 @@ fun ChatScreen(vm: ChatViewModel = viewModel()) {
             }
         }
     ) { padding ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item { Spacer(Modifier.height(8.dp)) }
-
-            items(state.messages) { msg ->
-                MessageBubble(msg)
+        if (state.messages.isEmpty()) {
+            EmptyChatPlaceholder(padding, onNewChat = { vm.createNewChat() })
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item { Spacer(Modifier.height(8.dp)) }
+                items(state.messages) { msg ->
+                    MessageBubble(msg)
+                }
+                if (state.isGenerating) {
+                    item { GeneratingIndicator() }
+                }
+                item { Spacer(Modifier.height(16.dp)) }
             }
+        }
+    }
+}
 
-            if (state.isGenerating) {
-                item { GeneratingIndicator() }
+@Composable
+fun EmptyChatPlaceholder(padding: PaddingValues, onNewChat: () -> Unit) {
+    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outline)
+            Spacer(Modifier.height(16.dp))
+            Text("Select a conversation from history", style = MaterialTheme.typography.bodyLarge)
+            Text("or start a new one", style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(24.dp))
+            Button(onClick = onNewChat) {
+                Text("Start New Chat")
             }
-
-            item { Spacer(Modifier.height(16.dp)) }
         }
     }
 }
@@ -109,7 +134,6 @@ fun MessageBubble(msg: ChatMessage) {
         Modifier.fillMaxWidth(),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        // Collapsible Thinking Section
         if (!isUser && msg.thinkingContent != null) {
             Card(
                 colors = CardDefaults.cardColors(
@@ -158,8 +182,8 @@ fun MessageBubble(msg: ChatMessage) {
             color = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
             contentColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
             shape = if (isUser) 
-                MaterialTheme.shapes.medium.copy(bottomEnd = CornerSize(0.dp)) 
-                else MaterialTheme.shapes.medium.copy(bottomStart = CornerSize(0.dp)),
+                MaterialTheme.shapes.medium.copy(bottomEnd = androidx.compose.foundation.shape.CornerSize(0.dp)) 
+                else MaterialTheme.shapes.medium.copy(bottomStart = androidx.compose.foundation.shape.CornerSize(0.dp)),
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
             Text(
@@ -173,18 +197,9 @@ fun MessageBubble(msg: ChatMessage) {
 
 @Composable
 fun GeneratingIndicator() {
-    Row(
-        Modifier.padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        CircularProgressIndicator(
-            Modifier.size(14.dp),
-            strokeWidth = 2.dp,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(Modifier.width(8.dp))
-        Text("AI is generating response...", style = MaterialTheme.typography.labelSmall)
+    Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.width(12.dp))
+        Text("AI is typing...", style = MaterialTheme.typography.labelSmall)
     }
 }
-
-private fun CornerSize(size: androidx.compose.ui.unit.Dp) = androidx.compose.foundation.shape.CornerSize(size)

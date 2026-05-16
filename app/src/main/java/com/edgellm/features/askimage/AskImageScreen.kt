@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -22,6 +24,7 @@ fun AskImageScreen(vm: AskImageViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
     var prompt by remember { mutableStateOf("") }
+    val scrollState = rememberScrollState()
 
     // Gallery picker
     val galleryLauncher = rememberLauncherForActivityResult(
@@ -31,91 +34,101 @@ fun AskImageScreen(vm: AskImageViewModel = viewModel()) {
     // Camera capture
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
-    ) { success -> if (success) { /* image already set via vm.captureUri */ } }
+    ) { success -> if (success) { /* already handled in capture logic */ } }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Ask Image", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(16.dp))
+    Scaffold(
+        topBar = {
+            TopAppBar(title = { Text("Vision Lab") })
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(scrollState) // CRITICAL: Fixes hidden buttons
+        ) {
+            // Image preview
+            state.imageUri?.let { uri ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().height(250.dp),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Image(
+                        painter = rememberAsyncImagePainter(uri),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
 
-        // Image preview
-        state.imageUri?.let { uri ->
-            Image(
-                painter = rememberAsyncImagePainter(uri),
-                contentDescription = null,
-                modifier = Modifier.fillMaxWidth().height(200.dp)
-            )
+            // Pick image buttons
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { galleryLauncher.launch("image/*") },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.PhotoLibrary, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Library")
+                }
+                Button(
+                    onClick = {
+                        val uri = vm.createCaptureUri(context)
+                        cameraLauncher.launch(uri)
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.CameraAlt, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Camera")
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            Text("Ask the AI about this image:", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(8.dp))
-        }
 
-        // Pick image buttons
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = { galleryLauncher.launch("image/*") },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.PhotoLibrary, null)
-                Spacer(Modifier.width(4.dp))
-                Text("Gallery")
-            }
-            OutlinedButton(
-                onClick = {
-                    val uri = vm.createCaptureUri(context)
-                    cameraLauncher.launch(uri)
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.CameraAlt, null)
-                Spacer(Modifier.width(4.dp))
-                Text("Camera")
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Prompt templates (like Edge Gallery)
-        Text("Quick prompts:", style = MaterialTheme.typography.labelMedium)
-        Spacer(Modifier.height(4.dp))
-        listOf(
-            "Describe this image in detail",
-            "What objects are in this image?",
-            "Solve this visual puzzle",
-            "Extract all text from this image",
-            "Write a design brief for this"
-        ).forEach { template ->
-            FilterChip(
-                selected = prompt == template,
-                onClick = { prompt = template },
-                label = { Text(template, style = MaterialTheme.typography.bodySmall) },
-                modifier = Modifier.padding(vertical = 2.dp)
+            OutlinedTextField(
+                value = prompt,
+                onValueChange = { prompt = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("e.g. Describe this image in detail") },
+                minLines = 3
             )
-        }
 
-        Spacer(Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = prompt,
-            onValueChange = { prompt = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Ask about this image…") }
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        Button(
-            onClick = { vm.analyze(prompt) },
-            enabled = state.imageBytes != null && prompt.isNotBlank() && !state.isAnalyzing,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(if (state.isAnalyzing) "Analyzing…" else "Analyze") }
-
-        state.result?.let { result ->
             Spacer(Modifier.height(16.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth()
+
+            Button(
+                onClick = { vm.analyze(prompt) },
+                enabled = state.imageBytes != null && prompt.isNotBlank() && !state.isAnalyzing,
+                modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
-                Text(result, Modifier.padding(12.dp))
+                if (state.isAnalyzing) {
+                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Analyzing...")
+                } else {
+                    Text("Run Vision AI")
+                }
             }
+
+            state.result?.let { result ->
+                Spacer(Modifier.height(24.dp))
+                Text("Result", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(result, Modifier.padding(16.dp))
+                }
+            }
+            
+            Spacer(Modifier.height(32.dp))
         }
     }
 }
