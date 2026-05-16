@@ -1,6 +1,8 @@
 package com.edgellm.features.promptlab
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -17,8 +19,15 @@ fun PromptLabScreen(vm: PromptLabViewModel = viewModel()) {
     var topK by remember { mutableStateOf(40f) }
     var maxTokens by remember { mutableStateOf(512f) }
     var showConfig by remember { mutableStateOf(false) }
+    
+    val scrollState = rememberScrollState()
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(scrollState)
+    ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Prompt Lab", style = MaterialTheme.typography.headlineMedium)
             TextButton(onClick = { showConfig = !showConfig }) {
@@ -69,7 +78,7 @@ fun PromptLabScreen(vm: PromptLabViewModel = viewModel()) {
         OutlinedTextField(
             value = prompt,
             onValueChange = { prompt = it },
-            modifier = Modifier.fillMaxWidth().height(120.dp),
+            modifier = Modifier.fillMaxWidth().height(150.dp),
             placeholder = { Text("Enter your prompt…") }
         )
 
@@ -91,15 +100,25 @@ fun PromptLabScreen(vm: PromptLabViewModel = viewModel()) {
 
         state.result?.let { result ->
             Spacer(Modifier.height(16.dp))
-            // Stats bar like Edge Gallery
+            // Stats bar
             state.stats?.let { stats ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Text("${stats.tokensPerSec} tok/s", style = MaterialTheme.typography.labelSmall)
-                    Text("${stats.totalTokens} tokens", style = MaterialTheme.typography.labelSmall)
-                    Text("${stats.latencyMs}ms first token", style = MaterialTheme.typography.labelSmall)
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        Modifier.padding(8.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        Text("${stats.tokensPerSec} tok/s", style = MaterialTheme.typography.labelSmall)
+                        Text("${stats.totalTokens} tokens", style = MaterialTheme.typography.labelSmall)
+                        Text("${stats.latencyMs}ms latency", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
             }
+            
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = MaterialTheme.shapes.medium,
@@ -108,5 +127,8 @@ fun PromptLabScreen(vm: PromptLabViewModel = viewModel()) {
                 Text(result, Modifier.padding(12.dp))
             }
         }
+        
+        // Extra space at bottom
+        Spacer(Modifier.height(32.dp))
     }
 }
