@@ -112,7 +112,7 @@ class EdgeLLMService : Service() {
     private fun buildNotification(text: String) = NotificationCompat.Builder(this, "edgellm_channel")
         .setContentTitle("EdgeLLM Pro")
         .setContentText(text)
-        .setSmallIcon(android.R.drawable.ic_dialog_info) // Fallback icon since we don't have R.mipmap.ic_launcher yet
+        .setSmallIcon(applicationInfo.icon)
         .setOngoing(true)
         .build()
 

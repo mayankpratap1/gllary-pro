@@ -1,9 +1,12 @@
 package com.edgellm.ui
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.*
 import com.edgellm.features.agentskills.AgentSkillsScreen
 import com.edgellm.features.askimage.AskImageScreen

@@ -56,9 +56,11 @@ class LiteRtEngine : InferenceEngine {
     }
 
     override fun generateStream(prompt: String): Flow<String> {
-        check(isLoaded) { "No model loaded" }
+        val currentConversation = conversation ?: throw IllegalStateException("No model loaded")
         return flow {
-            conversation!!.sendMessageAsync(prompt).collect { token -> emit(token) }
+            currentConversation.sendMessageAsync(prompt).collect { token -> 
+                emit(token) 
+            }
         }.flowOn(Dispatchers.IO)
     }
 

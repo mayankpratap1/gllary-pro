@@ -47,11 +47,9 @@ class GgufEngine(private val contentResolver: ContentResolver) : InferenceEngine
         return mutex.withLock {
             val sb = StringBuilder()
             val job = scope.launch {
-                _events.collect { e ->
-                    when (e) {
-                        is LlamaHelper.LLMEvent.Ongoing -> sb.append(e.word)
-                        is LlamaHelper.LLMEvent.Done -> return@collect
-                        else -> {}
+                _events.takeWhile { it !is LlamaHelper.LLMEvent.Done }.collect { e ->
+                    if (e is LlamaHelper.LLMEvent.Ongoing) {
+                        sb.append(e.word)
                     }
                 }
             }
@@ -69,17 +67,11 @@ class GgufEngine(private val contentResolver: ContentResolver) : InferenceEngine
         )
         scope.launch {
             mutex.withLock {
-                val job = launch {
-                    _events.collect { e ->
-                        when (e) {
-                            is LlamaHelper.LLMEvent.Ongoing -> flow.emit(e.word)
-                            is LlamaHelper.LLMEvent.Done -> return@collect
-                            else -> {}
-                        }
+                _events.takeWhile { it !is LlamaHelper.LLMEvent.Done }.collect { e ->
+                    if (e is LlamaHelper.LLMEvent.Ongoing) {
+                        flow.emit(e.word)
                     }
                 }
-                helper!!.predict(prompt)
-                job.join()
             }
         }
         return flow
