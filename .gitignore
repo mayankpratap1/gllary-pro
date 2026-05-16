@@ -1,0 +1,13 @@
+# Android
+.gradle/
+build/
+*.apk
+*.zip
+
+# Local config
+local.properties
+.idea/
+
+# Blueprint
+BLUEPRINT_V2_FULL.md
+ai-edge-gallery.apk
