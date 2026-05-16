@@ -1,6 +1,5 @@
 package com.edgellm.features.chat
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 
+/**
+ * AI Chat Screen.
+ * Fixed: Scrolling, Keyboard visibility, and Message bubbles.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(vm: ChatViewModel = viewModel()) {
@@ -23,10 +26,10 @@ fun ChatScreen(vm: ChatViewModel = viewModel()) {
     var input by remember { mutableStateOf("") }
     var showThinking by remember { mutableStateOf(false) }
 
-    // Auto-scroll to bottom when new messages arrive
-    LaunchedEffect(state.messages.size, state.isGenerating) {
+    // Automatically scroll to the latest message
+    LaunchedEffect(state.messages.size) {
         if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.size)
+            listState.animateScrollToItem(state.messages.size - 1)
         }
     }
 
@@ -35,50 +38,46 @@ fun ChatScreen(vm: ChatViewModel = viewModel()) {
             TopAppBar(
                 title = { Text("AI Chat") },
                 actions = {
-                    IconToggleButton(
-                        checked = showThinking,
-                        onCheckedChange = { showThinking = it }
-                    ) {
+                    IconToggleButton(checked = showThinking, onCheckedChange = { showThinking = it }) {
                         Icon(
                             Icons.Default.Psychology,
                             contentDescription = "Thinking Mode",
-                            tint = if (showThinking) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurface
+                            tint = if (showThinking) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
             )
         },
         bottomBar = {
-            // Input Row at the bottom, respecting the keyboard
-            Surface(tonalElevation = 3.dp) {
+            // THEME: Bottom input bar with keyboard support
+            Surface(tonalElevation = 8.dp) {
                 Row(
-                    Modifier
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 12.dp)
-                        .navigationBarsPadding() // Space for system nav
-                        .imePadding(), // Pushes up when keyboard appears
+                        .padding(8.dp)
+                        .imePadding() // CRITICAL: Pushes UI above keyboard
+                        .navigationBarsPadding(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedTextField(
                         value = input,
                         onValueChange = { input = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text(if (state.modelLoaded) "Type a message..." else "Load a model in Settings first") },
-                        enabled = !state.isGenerating,
-                        maxLines = 4
+                        placeholder = { Text("Message...") },
+                        maxLines = 4,
+                        enabled = !state.isGenerating
                     )
                     Spacer(Modifier.width(8.dp))
                     IconButton(
-                        onClick = { 
+                        onClick = {
                             if (input.isNotBlank()) {
                                 vm.sendMessage(input)
                                 input = ""
                             }
                         },
-                        enabled = input.isNotBlank() && state.modelLoaded && !state.isGenerating
+                        enabled = input.isNotBlank() && !state.isGenerating
                     ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Send, null, tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
@@ -93,15 +92,15 @@ fun ChatScreen(vm: ChatViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item { Spacer(Modifier.height(8.dp)) }
-            
+
             items(state.messages) { msg ->
                 MessageBubble(msg, showThinking)
             }
-            
+
             if (state.isGenerating) {
                 item { GeneratingIndicator() }
             }
-            
+
             item { Spacer(Modifier.height(16.dp)) }
         }
     }
@@ -120,24 +119,16 @@ fun MessageBubble(msg: ChatMessage, showThinking: Boolean) {
                 shape = MaterialTheme.shapes.small,
                 modifier = Modifier.fillMaxWidth(0.85f).padding(bottom = 4.dp)
             ) {
-                Column(Modifier.padding(8.dp)) {
-                    Text("💭 Thinking", style = MaterialTheme.typography.labelSmall)
-                    Text(msg.thinkingContent, style = MaterialTheme.typography.bodySmall)
-                }
+                Text(msg.thinkingContent, Modifier.padding(8.dp), style = MaterialTheme.typography.bodySmall)
             }
         }
 
         Surface(
-            color = if (isUser) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceVariant,
+            color = if (isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
             shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.widthIn(max = 300.dp)
+            modifier = Modifier.widthIn(max = 280.dp)
         ) {
-            Text(
-                text = msg.content,
-                modifier = Modifier.padding(12.dp),
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Text(msg.content, Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

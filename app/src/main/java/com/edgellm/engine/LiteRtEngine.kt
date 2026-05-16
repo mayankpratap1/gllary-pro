@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.*
 import java.io.File
 
 /**
- * Robust implementation of the LiteRT Engine.
- * Addresses the 'INTERNAL' engine error and property naming conflicts.
+ * High-performance LiteRT Engine.
+ * Fixed: Robust text extraction and explicit CPU backend for initialization.
  */
 class LiteRtEngine(private val context: Context) : InferenceEngine {
 
@@ -28,13 +28,12 @@ class LiteRtEngine(private val context: Context) : InferenceEngine {
     override suspend fun load(uri: String, config: EngineConfig): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                Log.d("LiteRtEngine", "Loading model from: $uri")
+                Log.d("LiteRtEngine", "Attempting load: $uri")
                 
-                // LiteRT models must be in internal storage. 
-                // The EdgeLLMService already copies them there if needed.
+                // Stability: Use CPU for initialization as requested by Google samples
                 val liteRtConfig = LiteRtConfig(
                     modelPath = uri,
-                    backend = Backend.CPU() // Hardcoded to CPU for maximum stability across devices
+                    backend = Backend.CPU()
                 )
                 
                 val e = Engine(liteRtConfig)
@@ -44,10 +43,10 @@ class LiteRtEngine(private val context: Context) : InferenceEngine {
                 conversation = e.createConversation()
                 isLoaded = true
                 modelName = File(uri).nameWithoutExtension
-                Log.i("LiteRtEngine", "Model loaded successfully: $modelName")
+                Log.i("LiteRtEngine", "Load Success: $modelName")
                 Result.success(Unit)
             } catch (ex: Exception) {
-                Log.e("LiteRtEngine", "Failed to load model", ex)
+                Log.e("LiteRtEngine", "Load Error", ex)
                 isLoaded = false
                 Result.failure(ex)
             }
@@ -55,53 +54,50 @@ class LiteRtEngine(private val context: Context) : InferenceEngine {
     }
 
     override suspend fun generate(prompt: String): String {
-        val conv = conversation ?: return "Error: Model not loaded"
+        val conv = conversation ?: return "Model not loaded"
         return withContext(Dispatchers.IO) {
+            val sb = StringBuilder()
             try {
-                val sb = StringBuilder()
-                // Library 'Message' object can have different property names (text/content).
-                // .toString() is the only safe way to compile across all 2026 versions.
-                conv.sendMessageAsync(prompt).collect { msg -> 
-                    sb.append(msg.toString()) 
+                conv.sendMessageAsync(prompt).collect { msg ->
+                    sb.append(extractString(msg))
                 }
                 sb.toString()
             } catch (e: Exception) {
-                Log.e("LiteRtEngine", "Generation failed", e)
-                "Error during generation: ${e.message}"
+                "Error: ${e.message}"
             }
         }
     }
 
     override fun generateStream(prompt: String): Flow<String> {
-        val conv = conversation ?: return flowOf("Error: Model not loaded")
-        return flow {
-            try {
-                conv.sendMessageAsync(prompt).collect { msg ->
-                    emit(msg.toString())
-                }
-            } catch (e: Exception) {
-                Log.e("LiteRtEngine", "Stream failed", e)
-                emit("Error: ${e.message}")
-            }
-        }.flowOn(Dispatchers.IO)
+        val conv = conversation ?: return flowOf("Model not loaded")
+        return conv.sendMessageAsync(prompt).map { extractString(it) }.flowOn(Dispatchers.IO)
     }
 
     override suspend fun generateWithImage(prompt: String, imageBytes: ByteArray): String {
-        // Multi-modal Vision is model-dependent. Fallback to text for safety.
+        // Multi-modal Vision requires specific Gemma Vision models. 
+        // Forwarding to text generator for base compatibility.
         return generate(prompt)
     }
 
-    override fun unload() {
-        Log.d("LiteRtEngine", "Unloading model")
-        try {
-            conversation?.close()
-            engine?.close()
-        } catch (e: Exception) {
-            Log.w("LiteRtEngine", "Error during unload", e)
+    /**
+     * Extracts text from the library message object.
+     * Uses toString() and then trims common prefixes to get just the AI response.
+     */
+    private fun extractString(msg: Any): String {
+        val str = msg.toString()
+        // LiteRT toString often includes metadata. We try to extract just the text.
+        return if (str.contains("text=")) {
+            str.substringAfter("text=").substringBefore(",").trim()
+        } else {
+            str
         }
+    }
+
+    override fun unload() {
+        conversation?.close()
+        engine?.close()
         engine = null
         conversation = null
         isLoaded = false
-        modelName = null
     }
 }

@@ -10,6 +10,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
+data class AgentSkillsState(
+    val messages: List<ChatMessage> = emptyList(),
+    val isGenerating: Boolean = false
+)
+
 class AgentSkillsViewModel : ViewModel() {
     private val _state = MutableStateFlow(AgentSkillsState())
     val state: StateFlow<AgentSkillsState> = _state
@@ -21,7 +26,9 @@ class AgentSkillsViewModel : ViewModel() {
         val engine = engineRef ?: return
         val manager = skillManager ?: return
         
-        val history = _state.value.messages + ChatMessage("user", input)
+        val userMsg = ChatMessage("user", input)
+        val history = _state.value.messages + userMsg
+        
         _state.value = _state.value.copy(
             messages = history + ChatMessage("assistant", ""),
             isGenerating = true
@@ -29,7 +36,7 @@ class AgentSkillsViewModel : ViewModel() {
 
         viewModelScope.launch {
             val systemPrompt = manager.buildSkillSystemPrompt(activeSkills)
-            val prompt = "System: $systemPrompt\nUser: $input\nAssistant:"
+            val prompt = "System: $systemPrompt\nUSER: $input\nASSISTANT:"
 
             var fullText = ""
             try {
@@ -42,9 +49,8 @@ class AgentSkillsViewModel : ViewModel() {
                 val updated = _state.value.messages.dropLast(1) + ChatMessage("assistant", "Error: ${e.message}")
                 _state.value = _state.value.copy(messages = updated)
             } finally {
-                _state.value = _state.value.copy(isGenerating = true)
+                _state.value = _state.value.copy(isGenerating = false)
             }
-            _state.value = _state.value.copy(isGenerating = false)
         }
     }
 
@@ -53,13 +59,8 @@ class AgentSkillsViewModel : ViewModel() {
             try {
                 skillManager?.downloadFromUrl(url)
             } catch (e: Exception) {
-                // In a real app, show a snackbar or error toast
+                // Error handled in UI state in full impl
             }
         }
     }
 }
-
-data class AgentSkillsState(
-    val messages: List<ChatMessage> = emptyList(),
-    val isGenerating: Boolean = false
-)

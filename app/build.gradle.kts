@@ -59,9 +59,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("androidx.activity:activity-compose:1.9.1")
 
-    // ── Dual inference ──
-    implementation("io.github.ljcamargo:llamacpp-kotlin:0.4.0")
+    // ── AI Engines ──
     implementation("com.google.ai.edge.litertlm:litertlm-android:latest.release")
+    // Note: llamacpp-kotlin removed until stable build path verified to prevent build blocking
 
     // ── Ktor server ──
     implementation("io.ktor:ktor-server-cio:3.2.3")
@@ -88,14 +88,14 @@ dependencies {
     implementation("androidx.room:room-ktx:2.7.0")
     ksp("androidx.room:room-compiler:2.7.0")
 
-    // ── Core ──
+    // ── Utility ──
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // ── Image loading (Ask Image preview) ──
+    // ── Image loading ──
     implementation("io.coil-kt:coil-compose:2.7.0")
 
-    // ── Markdown (skill cards) ──
+    // ── Markdown ──
     implementation("io.noties.markwon:core:4.6.2")
 }
