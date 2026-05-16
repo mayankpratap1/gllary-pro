@@ -1,6 +1,8 @@
 package com.edgellm.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -37,7 +39,7 @@ fun MainNavigation() {
     val service = com.edgellm.LocalEdgeLLMService.current
     val context = LocalContext.current
     val app = context.applicationContext as MyApplication
-    val repository = remember { ChatRepository(app.database.chatDao()) }
+    val repository = app.repository
     
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -102,12 +104,20 @@ fun MainNavigation() {
                     ChatScreen(chatVm, onOpenDrawer = { scope.launch { drawerState.open() } })
                 }
                 composable("askimage") {
-                    val vm: AskImageViewModel = viewModel()
+                    val vm: AskImageViewModel = viewModel(factory = object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return AskImageViewModel(repository) as T
+                        }
+                    })
                     LaunchedEffect(service?.currentEngine) { vm.engineRef = service?.currentEngine }
                     AskImageScreen(vm)
                 }
                 composable("audioscribe") {
-                    val vm: AudioScribeViewModel = viewModel()
+                    val vm: AudioScribeViewModel = viewModel(factory = object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return AudioScribeViewModel(repository) as T
+                        }
+                    })
                     LaunchedEffect(service?.currentEngine) { vm.engineRef = service?.currentEngine }
                     AudioScribeScreen(vm)
                 }
@@ -157,7 +167,7 @@ fun ChatHistoryDrawerContent(
         }
         
         Spacer(Modifier.height(16.dp))
-        Divider()
+        HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {

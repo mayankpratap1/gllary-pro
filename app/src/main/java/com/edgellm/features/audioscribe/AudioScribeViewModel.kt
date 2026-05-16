@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.util.*
 
-class AudioScribeViewModel : ViewModel() {
+class AudioScribeViewModel(private val repository: ChatRepository) : ViewModel() {
     private val _state = MutableStateFlow(AudioScribeState())
     val state: StateFlow<AudioScribeState> = _state
 
@@ -62,16 +62,17 @@ class AudioScribeViewModel : ViewModel() {
     private fun processWithAI(text: String) {
         val engine = engineRef ?: return
         
-        // Add to persistent chat history
-        ChatRepository.addMessage(ChatMessage("user", "[Voice] $text"))
-        
         viewModelScope.launch {
             try {
+                // Auto-create session for audio if none exists
+                val sessionId = repository.createNewSession("Audio Transcript")
+                repository.saveMessage(sessionId, ChatMessage("user", "[Voice] $text"))
+                
                 val response = engine.generate(text)
                 _state.value = _state.value.copy(transcript = "AI Response: $response", isProcessing = false)
                 
                 // Save AI response to history
-                ChatRepository.addMessage(ChatMessage("assistant", response))
+                repository.saveMessage(sessionId, ChatMessage("assistant", response))
             } catch (e: Exception) {
                 _state.value = _state.value.copy(error = "AI Error: ${e.message}", isProcessing = false)
             }

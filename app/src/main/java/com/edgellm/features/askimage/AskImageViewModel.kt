@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class AskImageViewModel : ViewModel() {
+class AskImageViewModel(private val repository: ChatRepository) : ViewModel() {
     private val _state = MutableStateFlow(AskImageState())
     val state: StateFlow<AskImageState> = _state
 
@@ -48,17 +48,18 @@ class AskImageViewModel : ViewModel() {
         
         _state.value = _state.value.copy(isAnalyzing = true)
         
-        // Add to global chat history for persistence
-        ChatRepository.addMessage(ChatMessage("user", "[Image Sent] $prompt"))
-        
         viewModelScope.launch {
             try {
+                // Auto-create session for vision if none exists (simplified for now)
+                val sessionId = repository.createNewSession("Vision Analysis")
+                repository.saveMessage(sessionId, ChatMessage("user", "[Image Sent] $prompt"))
+                
                 // Trigger actual engine inference
                 val response = engine.generateWithImage(prompt, bytes)
                 _state.value = _state.value.copy(result = response, isAnalyzing = false)
                 
                 // Save AI response to history
-                ChatRepository.addMessage(ChatMessage("assistant", response))
+                repository.saveMessage(sessionId, ChatMessage("assistant", response))
             } catch (e: Exception) {
                 _state.value = _state.value.copy(result = "Error: ${e.message}", isAnalyzing = false)
             }
