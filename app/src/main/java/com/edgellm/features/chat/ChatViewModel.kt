@@ -11,30 +11,39 @@ data class ChatState(
     val messages: List<ChatMessage> = emptyList(),
     val isGenerating: Boolean = false,
     val currentSessionId: Long? = null,
-    val error: String? = null
+    val streamingText: String = "" // In-memory buffer for smooth UI updates
 )
 
 class ChatViewModel(private val repository: ChatRepository) : ViewModel() {
     
     private val _currentSessionId = MutableStateFlow<Long?>(null)
     private val _isGenerating = MutableStateFlow(false)
+    private val _streamingText = MutableStateFlow("")
     
     val state: StateFlow<ChatState> = combine(
         _currentSessionId,
         _isGenerating,
+        _streamingText,
         _currentSessionId.flatMapLatest { id ->
             if (id != null) repository.getMessages(id) else flowOf(emptyList())
         }
-    ) { sessionId, isGen, messages ->
+    ) { sessionId, isGen, streaming, dbMessages ->
+        // If we are generating, append the streaming buffer to the UI list
+        val displayMessages = if (isGen && streaming.isNotEmpty()) {
+            dbMessages.dropLast(1) + ChatMessage("assistant", streaming)
+        } else {
+            dbMessages
+        }
+        
         ChatState(
-            messages = messages,
+            messages = displayMessages,
             isGenerating = isGen,
-            currentSessionId = sessionId
+            currentSessionId = sessionId,
+            streamingText = streaming
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChatState())
 
     val sessions = repository.sessions
-
     var engineRef: com.edgellm.engine.InferenceEngine? = null
     var skillManager: SkillManager? = null
     var agentSkillsEnabled: Boolean = true
@@ -53,9 +62,7 @@ class ChatViewModel(private val repository: ChatRepository) : ViewModel() {
     fun deleteSession(id: Long) {
         viewModelScope.launch {
             repository.deleteSession(id)
-            if (_currentSessionId.value == id) {
-                _currentSessionId.value = null
-            }
+            if (_currentSessionId.value == id) _currentSessionId.value = null
         }
     }
 
@@ -63,36 +70,42 @@ class ChatViewModel(private val repository: ChatRepository) : ViewModel() {
         val engine = engineRef ?: return
         
         viewModelScope.launch {
-            // Auto-create session if none exists
             val sessionId = _currentSessionId.value ?: repository.createNewSession("New Chat").also { 
                 _currentSessionId.value = it 
             }
             
+            // Save user message to DB immediately
             repository.saveMessage(sessionId, ChatMessage("user", text))
-            repository.saveMessage(sessionId, ChatMessage("assistant", ""))
             
+            // Start generation state
             _isGenerating.value = true
+            _streamingText.value = ""
             
             val systemPrompt = if (agentSkillsEnabled) {
                 skillManager?.buildSkillSystemPrompt(skillManager!!.skills.value) ?: ""
             } else ""
 
             val history = state.value.messages
-            val prompt = buildPrompt(systemPrompt, history.dropLast(1))
+            val prompt = buildPrompt(systemPrompt, history)
 
-            var fullText = ""
+            var fullResponse = ""
             try {
                 engine.generateStream(prompt).collect { token ->
-                    fullText += token
-                    val result = processThinkingTags(fullText)
-                    repository.saveMessage(sessionId, 
-                        ChatMessage("assistant", result.second, result.first.ifEmpty { null })
-                    )
+                    fullResponse += token
+                    // Update only UI buffer for speed
+                    _streamingText.value = fullResponse
                 }
+                
+                // Once done, save the complete message to the persistent database
+                val result = processThinkingTags(fullResponse)
+                repository.saveMessage(sessionId, 
+                    ChatMessage("assistant", result.second, result.first.ifEmpty { null })
+                )
             } catch (e: Exception) {
                 repository.saveMessage(sessionId, ChatMessage("assistant", "Error: ${e.message}"))
             } finally {
                 _isGenerating.value = false
+                _streamingText.value = ""
             }
         }
     }
@@ -106,7 +119,6 @@ class ChatViewModel(private val repository: ChatRepository) : ViewModel() {
     }
 
     private fun processThinkingTags(text: String): Pair<String, String> {
-        // Regex refined for 2026 standards (handles multi-line and greedy matching)
         val thinkRegex = Regex("<think>(.*?)</think>", RegexOption.DOT_MATCHES_ALL)
         val thinking = thinkRegex.findAll(text).joinToString("\n") { it.groupValues[1] }
         val display = thinkRegex.replace(text, "").trim()
