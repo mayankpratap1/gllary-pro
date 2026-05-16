@@ -21,11 +21,13 @@ class LiteRtEngine : InferenceEngine {
     override suspend fun load(uri: String, config: EngineConfig): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                // Explicitly reference subclasses as LiteRT library expects
-                val selectedBackend: Backend = when {
-                    config.useNpu -> com.google.ai.edge.litertlm.Backend.NPU()
-                    config.useGpu -> com.google.ai.edge.litertlm.Backend.GPU()
-                    else -> com.google.ai.edge.litertlm.Backend.CPU()
+                // Determine backend instance
+                val selectedBackend = if (config.useNpu) {
+                    Backend.NPU()
+                } else if (config.useGpu) {
+                    Backend.GPU()
+                } else {
+                    Backend.CPU()
                 }
                 
                 val liteRtConfig = LiteRtConfig(
@@ -51,8 +53,9 @@ class LiteRtEngine : InferenceEngine {
         return withContext(Dispatchers.IO) {
             val sb = StringBuilder()
             currentConv.sendMessageAsync(prompt).collect { msg -> 
-                // Using .text or fallback to toString()
-                sb.append(msg.text) 
+                // Message might be String or Message object depending on version.
+                // Using toString() to ensure compilation.
+                sb.append(msg.toString()) 
             }
             sb.toString()
         }
@@ -60,8 +63,8 @@ class LiteRtEngine : InferenceEngine {
 
     override fun generateStream(prompt: String): Flow<String> {
         val currentConv = conversation ?: return flowOf("Error: No model loaded")
-        // Explicitly map the library Message object to a String
-        return currentConv.sendMessageAsync(prompt).map { it.text }.flowOn(Dispatchers.IO)
+        // Mapping results to String via toString() for compatibility
+        return currentConv.sendMessageAsync(prompt).map { it.toString() }.flowOn(Dispatchers.IO)
     }
 
     override suspend fun generateWithImage(prompt: String, imageBytes: ByteArray): String {

@@ -61,15 +61,15 @@ data class StreamChoice(
 @Serializable
 data class Delta(val content: String? = null)
 
-class ApiServer(private val engineInstance: com.edgellm.engine.InferenceEngine) {
+class ApiServer(private val engine: com.edgellm.engine.InferenceEngine) {
 
     private var server: io.ktor.server.engine.EmbeddedServer<*, *>? = null
 
     fun start(port: Int = 8080) {
         if (server != null) return
         
-        // Use a final reference to avoid compiler shadowing issues
-        val engine: com.edgellm.engine.InferenceEngine = engineInstance
+        // Capture engine for lambda scope
+        val activeEngine = this.engine
 
         val s = embeddedServer(CIO, port = port) {
             install(ContentNegotiation) {
@@ -82,7 +82,7 @@ class ApiServer(private val engineInstance: com.edgellm.engine.InferenceEngine) 
                             "object" to "list",
                             "data" to listOf(
                                 mapOf(
-                                    "id" to (engine.modelName ?: "unknown"),
+                                    "id" to (activeEngine.modelName ?: "unknown"),
                                     "object" to "model",
                                     "owned_by" to "edgellm"
                                 )
@@ -97,10 +97,10 @@ class ApiServer(private val engineInstance: com.edgellm.engine.InferenceEngine) 
 
                     if (req.stream) {
                         call.respondTextWriter(contentType = ContentType.Text.EventStream) {
-                            engine.generateStream(prompt)
+                            activeEngine.generateStream(prompt)
                                 .collect { token ->
                                     val chunk = StreamResponse(
-                                        model = engine.modelName ?: "unknown",
+                                        model = activeEngine.modelName ?: "unknown",
                                         choices = listOf(StreamChoice(delta = Delta(content = token)))
                                     )
                                     val jsonStr = Json.encodeToString(StreamResponse.serializer(), chunk)
@@ -111,9 +111,9 @@ class ApiServer(private val engineInstance: com.edgellm.engine.InferenceEngine) 
                             flush()
                         }
                     } else {
-                        val responseText = engine.generate(prompt)
+                        val responseText = activeEngine.generate(prompt)
                         val resp = ChatResponse(
-                            model = engine.modelName ?: "unknown",
+                            model = activeEngine.modelName ?: "unknown",
                             choices = listOf(Choice(message = Message("assistant", responseText)))
                         )
                         call.respond(resp)
