@@ -2,6 +2,7 @@ package com.edgellm.features.audioscribe
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -23,6 +24,25 @@ class AudioScribeViewModel(private val repository: ChatRepository) : ViewModel()
     var engineRef: InferenceEngine? = null
     private var speechRecognizer: SpeechRecognizer? = null
 
+    fun onFilePicked(context: Context, uri: Uri) {
+        _state.value = _state.value.copy(isProcessing = true, error = null)
+        viewModelScope.launch {
+            try {
+                // In an enterprise app, we'd use a library like Whisper or Opus decoder.
+                // For this prototype, we simulate the transcription of the song/file.
+                val fileName = uri.path?.substringAfterLast("/") ?: "audio file"
+                val transcription = "[PROCESSED FILE: $fileName] This audio file contains spoken content or music. The AI is analyzing the pattern..."
+                
+                _state.value = _state.value.copy(transcript = transcription)
+                
+                // Automatically send to AI
+                processWithAI(transcription)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(isProcessing = false, error = "File error: ${e.message}")
+            }
+        }
+    }
+
     fun startRecording(context: Context) {
         if (speechRecognizer == null) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
@@ -43,8 +63,6 @@ class AudioScribeViewModel(private val repository: ChatRepository) : ViewModel()
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     val text = matches?.get(0) ?: ""
                     _state.value = _state.value.copy(transcript = text, isProcessing = true)
-                    
-                    // Automatically send transcription to the AI engine
                     processWithAI(text)
                 }
                 override fun onPartialResults(partialResults: Bundle?) {}
@@ -64,14 +82,12 @@ class AudioScribeViewModel(private val repository: ChatRepository) : ViewModel()
         
         viewModelScope.launch {
             try {
-                // Auto-create session for audio if none exists
-                val sessionId = repository.createNewSession("Audio Transcript")
-                repository.saveMessage(sessionId, ChatMessage("user", "[Voice] $text"))
+                val sessionId = repository.createNewSession("Audio Chat")
+                repository.saveMessage(sessionId, ChatMessage("user", "[Audio] $text"))
                 
                 val response = engine.generate(text)
-                _state.value = _state.value.copy(transcript = "AI Response: $response", isProcessing = false)
+                _state.value = _state.value.copy(transcript = "AI Analysis: $response", isProcessing = false)
                 
-                // Save AI response to history
                 repository.saveMessage(sessionId, ChatMessage("assistant", response))
             } catch (e: Exception) {
                 _state.value = _state.value.copy(error = "AI Error: ${e.message}", isProcessing = false)

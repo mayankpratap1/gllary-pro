@@ -26,7 +26,7 @@ fun AudioScribeScreen(vm: AudioScribeViewModel = viewModel()) {
 
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri -> uri?.let { /* In a pro app, you'd send this to a transcription engine */ } }
+    ) { uri -> uri?.let { vm.onFilePicked(context, it) } }
 
     Scaffold(
         topBar = {
