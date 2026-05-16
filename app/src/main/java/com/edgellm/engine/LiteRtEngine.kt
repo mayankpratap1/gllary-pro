@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.*
 import java.io.File
 
 /**
- * Reverted to the EXACT implementation used in the original Google Edge Gallery.
- * No abstractions, no "useless parts."
+ * Robust implementation of the LiteRT Engine.
+ * Uses .toString() to avoid property mismatches (text vs content) in different library versions.
  */
 class LiteRtEngine(private val context: Context) : InferenceEngine {
 
@@ -27,14 +27,11 @@ class LiteRtEngine(private val context: Context) : InferenceEngine {
     override suspend fun load(uri: String, config: EngineConfig): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                // Pin to CPU first to guarantee it works on any device
-                // This is how the original gallery handles initial setup
                 val liteRtConfig = LiteRtConfig(
                     modelPath = uri,
                     backend = Backend.CPU()
                 )
                 
-                // CRITICAL: Original gallery uses a simple constructor
                 val e = Engine(liteRtConfig)
                 e.initialize()
                 
@@ -54,18 +51,20 @@ class LiteRtEngine(private val context: Context) : InferenceEngine {
         val conv = conversation ?: return "Error: Model not ready"
         return withContext(Dispatchers.IO) {
             val sb = StringBuilder()
-            conv.sendMessageAsync(prompt).collect { msg -> sb.append(msg.text) }
+            conv.sendMessageAsync(prompt).collect { msg -> 
+                // Using toString() to avoid library version property mismatches
+                sb.append(msg.toString()) 
+            }
             sb.toString()
         }
     }
 
     override fun generateStream(prompt: String): Flow<String> {
         val conv = conversation ?: return flowOf("Error: Model not ready")
-        return conv.sendMessageAsync(prompt).map { it.text }.flowOn(Dispatchers.IO)
+        return conv.sendMessageAsync(prompt).map { it.toString() }.flowOn(Dispatchers.IO)
     }
 
     override suspend fun generateWithImage(prompt: String, imageBytes: ByteArray): String {
-        // Fallback to text for base stability
         return generate(prompt)
     }
 

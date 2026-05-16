@@ -68,7 +68,7 @@ class ApiServer(private val engine: com.edgellm.engine.InferenceEngine) {
     fun start(port: Int = 8080) {
         if (server != null) return
         
-        // Capture engine for lambda scope
+        // Final reference to ensure lambda visibility
         val activeEngine = this.engine
 
         val s = embeddedServer(CIO, port = port) {
