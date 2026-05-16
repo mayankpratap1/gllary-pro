@@ -21,13 +21,11 @@ class LiteRtEngine : InferenceEngine {
     override suspend fun load(uri: String, config: EngineConfig): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                // Instantiate backend classes
-                val selectedBackend = if (config.useNpu) {
-                    Backend.NPU()
-                } else if (config.useGpu) {
-                    Backend.GPU()
-                } else {
-                    Backend.CPU()
+                // Explicitly reference subclasses as LiteRT library expects
+                val selectedBackend: Backend = when {
+                    config.useNpu -> com.google.ai.edge.litertlm.Backend.NPU()
+                    config.useGpu -> com.google.ai.edge.litertlm.Backend.GPU()
+                    else -> com.google.ai.edge.litertlm.Backend.CPU()
                 }
                 
                 val liteRtConfig = LiteRtConfig(
@@ -53,7 +51,7 @@ class LiteRtEngine : InferenceEngine {
         return withContext(Dispatchers.IO) {
             val sb = StringBuilder()
             currentConv.sendMessageAsync(prompt).collect { msg -> 
-                // msg is com.google.ai.edge.litertlm.Message
+                // Using .text or fallback to toString()
                 sb.append(msg.text) 
             }
             sb.toString()
@@ -62,7 +60,7 @@ class LiteRtEngine : InferenceEngine {
 
     override fun generateStream(prompt: String): Flow<String> {
         val currentConv = conversation ?: return flowOf("Error: No model loaded")
-        // Map LiteRT Message object to String content
+        // Explicitly map the library Message object to a String
         return currentConv.sendMessageAsync(prompt).map { it.text }.flowOn(Dispatchers.IO)
     }
 
