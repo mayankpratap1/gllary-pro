@@ -61,12 +61,16 @@ data class StreamChoice(
 @Serializable
 data class Delta(val content: String? = null)
 
-class ApiServer(private val engine: InferenceEngine) {
+class ApiServer(private val engineInstance: InferenceEngine) {
 
     private var server: Any? = null
 
     fun start(port: Int = 8080) {
         if (server != null) return
+        
+        // Capture engine in a local variable for the routing scope
+        val activeEngine = engineInstance
+
         val s = embeddedServer(CIO, port = port) {
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true })
@@ -78,7 +82,7 @@ class ApiServer(private val engine: InferenceEngine) {
                             "object" to "list",
                             "data" to listOf(
                                 mapOf(
-                                    "id" to (engine.modelName ?: "unknown"),
+                                    "id" to (activeEngine.modelName ?: "unknown"),
                                     "object" to "model",
                                     "owned_by" to "edgellm"
                                 )
@@ -93,10 +97,10 @@ class ApiServer(private val engine: InferenceEngine) {
 
                     if (req.stream) {
                         call.respondTextWriter(contentType = ContentType.Text.EventStream) {
-                            engine.generateStream(prompt)
+                            activeEngine.generateStream(prompt)
                                 .collect { token ->
                                     val chunk = StreamResponse(
-                                        model = engine.modelName ?: "unknown",
+                                        model = activeEngine.modelName ?: "unknown",
                                         choices = listOf(StreamChoice(delta = Delta(content = token)))
                                     )
                                     val jsonStr = Json.encodeToString(StreamResponse.serializer(), chunk)
@@ -107,9 +111,9 @@ class ApiServer(private val engine: InferenceEngine) {
                             flush()
                         }
                     } else {
-                        val responseText = engine.generate(prompt)
+                        val responseText = activeEngine.generate(prompt)
                         val resp = ChatResponse(
-                            model = engine.modelName ?: "unknown",
+                            model = activeEngine.modelName ?: "unknown",
                             choices = listOf(Choice(message = Message("assistant", responseText)))
                         )
                         call.respond(resp)

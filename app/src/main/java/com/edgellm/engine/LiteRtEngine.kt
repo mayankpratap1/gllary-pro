@@ -15,19 +15,19 @@ class LiteRtEngine : InferenceEngine {
         private set
     override var modelName: String? = null
         private set
-    override val supportsVision = true   // Gemma 4 multimodal
-    override val supportsThinking = true // Gemma 4 thinking mode
+    override val supportsVision = true
+    override val supportsThinking = true
 
     override suspend fun load(uri: String, config: EngineConfig): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                // Determine backend instance
+                // Instantiate backend classes
                 val selectedBackend = if (config.useNpu) {
-                    Backend.NPU
+                    Backend.NPU()
                 } else if (config.useGpu) {
-                    Backend.GPU
+                    Backend.GPU()
                 } else {
-                    Backend.CPU
+                    Backend.CPU()
                 }
                 
                 val liteRtConfig = LiteRtConfig(
@@ -53,6 +53,7 @@ class LiteRtEngine : InferenceEngine {
         return withContext(Dispatchers.IO) {
             val sb = StringBuilder()
             currentConv.sendMessageAsync(prompt).collect { msg -> 
+                // msg is com.google.ai.edge.litertlm.Message
                 sb.append(msg.text) 
             }
             sb.toString()
@@ -61,6 +62,7 @@ class LiteRtEngine : InferenceEngine {
 
     override fun generateStream(prompt: String): Flow<String> {
         val currentConv = conversation ?: return flowOf("Error: No model loaded")
+        // Map LiteRT Message object to String content
         return currentConv.sendMessageAsync(prompt).map { it.text }.flowOn(Dispatchers.IO)
     }
 
