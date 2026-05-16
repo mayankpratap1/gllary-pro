@@ -139,7 +139,11 @@ fun MessageBubble(msg: ChatMessage) {
                         )
                     }
                     if (isThinkingExpanded) {
-                        Divider(Modifier.padding(vertical = 4.dp), alpha = 0.2f)
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.2f)
+                        )
                         Text(
                             text = msg.thinkingContent,
                             style = MaterialTheme.typography.bodySmall,
