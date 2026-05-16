@@ -58,7 +58,7 @@ class EdgeLLMService : Service() {
             uriString
         }
         
-        val newEngine = EngineFactory.create(finalUri, contentResolver)
+        val newEngine = EngineFactory.create(finalUri, this)
         val result = newEngine.load(finalUri, config)
         if (result.isSuccess) {
             currentEngine = newEngine
