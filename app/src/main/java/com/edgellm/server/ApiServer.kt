@@ -12,9 +12,9 @@ import io.ktor.server.response.respond
 import io.ktor.server.response.respondTextWriter
 import io.ktor.server.routing.*
 import kotlinx.coroutines.flow.collect
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
 
 @Serializable
 data class ChatRequest(
@@ -61,17 +61,16 @@ data class StreamChoice(
 @Serializable
 data class Delta(val content: String? = null)
 
-class ApiServer(private val engine: com.edgellm.engine.InferenceEngine) {
+class ApiServer(private val engineInstance: InferenceEngine) {
 
-    private var server: io.ktor.server.engine.EmbeddedServer<*, *>? = null
+    private var server: EmbeddedServer<*, *>? = null
 
     fun start(port: Int = 8080) {
         if (server != null) return
         
-        // Final reference to ensure lambda visibility
-        val activeEngine = this.engine
+        val activeEngine = engineInstance
 
-        val s = embeddedServer(CIO, port = port) {
+        server = embeddedServer(CIO, port = port) {
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true })
             }
@@ -97,16 +96,15 @@ class ApiServer(private val engine: com.edgellm.engine.InferenceEngine) {
 
                     if (req.stream) {
                         call.respondTextWriter(contentType = ContentType.Text.EventStream) {
-                            activeEngine.generateStream(prompt)
-                                .collect { token ->
-                                    val chunk = StreamResponse(
-                                        model = activeEngine.modelName ?: "unknown",
-                                        choices = listOf(StreamChoice(delta = Delta(content = token)))
-                                    )
-                                    val jsonStr = Json.encodeToString(StreamResponse.serializer(), chunk)
-                                    write("data: $jsonStr\n\n")
-                                    flush()
-                                }
+                            activeEngine.generateStream(prompt).collect { token ->
+                                val chunk = StreamResponse(
+                                    model = activeEngine.modelName ?: "unknown",
+                                    choices = listOf(StreamChoice(delta = Delta(content = token)))
+                                )
+                                val jsonStr = Json.encodeToString(chunk)
+                                write("data: $jsonStr\n\n")
+                                flush()
+                            }
                             write("data: [DONE]\n\n")
                             flush()
                         }
@@ -120,9 +118,7 @@ class ApiServer(private val engine: com.edgellm.engine.InferenceEngine) {
                     }
                 }
             }
-        }
-        server = s
-        s.start(wait = false)
+        }.start(wait = false)
     }
 
     fun stop() {
